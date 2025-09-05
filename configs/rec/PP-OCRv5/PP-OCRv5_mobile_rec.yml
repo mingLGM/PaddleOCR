@@ -2,16 +2,16 @@ Global:
   model_name: PP-OCRv5_mobile_rec # To use static model for inference.
   debug: false
   use_gpu: true
-  epoch_num: 75
+  epoch_num: 2
   log_smooth_window: 20
-  print_batch_step: 10
+  print_batch_step: 200
   save_model_dir: ./output/PP-OCRv5_mobile_rec
-  save_epoch_step: 10
+  save_epoch_step: 1
   eval_batch_step: [0, 2000]
   cal_metric_during_train: true
   pretrained_model: ./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
-  checkpoints:
-  save_inference_dir:
+  checkpoints: 
+  save_inference_dir: ./output/PP-OCRv5_mobile_rec/PP-OCRv5_mobile_rec_infer/
   use_visualdl: false
   infer_img: doc/imgs_words/ch/word_1.jpg
   character_dict_path: ./ppocr/utils/dict/ppocrv5_dict.txt
@@ -21,7 +21,9 @@ Global:
   distributed: true
   save_res_path: ./output/rec/predicts_ppocrv5.txt
   d2s_train_image_shape: [3, 48, 320]
-
+  use_amp: true
+  amp_level: O2
+  amp_dtype: bfloat16
 
 Optimizer:
   name: Adam
@@ -34,6 +36,7 @@ Optimizer:
   regularizer:
     name: L2
     factor: 3.0e-05
+  gradient_accumulation_steps: 2  # 梯度累积
 
 
 Architecture:
@@ -103,7 +106,7 @@ Train:
   sampler:
     name: MultiScaleSampler
     scales: [[320, 32], [320, 48], [320, 64]]
-    first_bs: &bs 128
+    first_bs: &bs 32
     fix_bs: false
     divided_factor: [8, 16] # w, h
     is_training: True
@@ -111,7 +114,7 @@ Train:
     shuffle: true
     batch_size_per_card: *bs
     drop_last: true
-    num_workers: 0
+    num_workers: 8
 Eval:
   dataset:
     name: SimpleDataSet
