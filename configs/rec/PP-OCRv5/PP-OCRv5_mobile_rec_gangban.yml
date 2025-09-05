@@ -2,26 +2,28 @@ Global:
   model_name: PP-OCRv5_mobile_rec # To use static model for inference.
   debug: false
   use_gpu: true
-  epoch_num: 75
+  epoch_num: 500
   log_smooth_window: 20
-  print_batch_step: 10
-  save_model_dir: ./output/PP-OCRv5_mobile_rec
-  save_epoch_step: 10
-  eval_batch_step: [0, 2000]
+  print_batch_step: 200
+  save_model_dir: ./output/gangban/PP-OCRv5_mobile_rec
+  save_epoch_step: 50
+  eval_batch_step: [0, 10]
   cal_metric_during_train: true
-  pretrained_model: ./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
-  checkpoints:
-  save_inference_dir:
-  use_visualdl: false
+  pretrained_model: #./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
+  checkpoints: 
+  save_inference_dir: ./output/gangban/PP-OCRv5_mobile_rec/PP-OCRv5_mobile_rec_infer/
+  use_visualdl: true
   infer_img: doc/imgs_words/ch/word_1.jpg
   character_dict_path: ./ppocr/utils/dict/ppocrv5_dict.txt
   max_text_length: &max_text_length 25
   infer_mode: false
   use_space_char: true
   distributed: true
-  save_res_path: ./output/rec/predicts_ppocrv5.txt
+  save_res_path: ./output/gangban/rec/predicts_ppocrv5.txt
   d2s_train_image_shape: [3, 48, 320]
-
+  # use_amp: true
+  # amp_level: O2
+  # amp_dtype: bfloat16
 
 Optimizer:
   name: Adam
@@ -29,11 +31,12 @@ Optimizer:
   beta2: 0.999
   lr:
     name: Cosine
-    learning_rate: 0.0005
-    warmup_epoch: 5
+    learning_rate: 0.0001
+    warmup_epoch: 20
   regularizer:
     name: L2
     factor: 3.0e-05
+  gradient_accumulation_steps: 2  # 梯度累积
 
 
 Architecture:
@@ -64,7 +67,10 @@ Loss:
   name: MultiLoss
   loss_config_list:
     - CTCLoss:
+        weight: 0.7  # 增加CTC损失的权重
     - NRTRLoss:
+        weight: 0.3  # 减少NRTR损失的权重
+
 
 PostProcess:  
   name: CTCLabelDecode
@@ -77,10 +83,10 @@ Train:
   dataset:
     name: MultiScaleDataSet
     ds_width: false
-    data_dir: ./datasets/ocr_rec_dataset_examples/
+    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/
     ext_op_transform_idx: 1
     label_file_list:
-    - ./datasets/ocr_rec_dataset_examples/train.txt
+    - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/rec_label_train.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -103,7 +109,7 @@ Train:
   sampler:
     name: MultiScaleSampler
     scales: [[320, 32], [320, 48], [320, 64]]
-    first_bs: &bs 128
+    first_bs: &bs 4
     fix_bs: false
     divided_factor: [8, 16] # w, h
     is_training: True
@@ -111,13 +117,13 @@ Train:
     shuffle: true
     batch_size_per_card: *bs
     drop_last: true
-    num_workers: 0
+    num_workers: 32
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: ./datasets/ocr_rec_dataset_examples
+    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/
     label_file_list:
-    - ./datasets/ocr_rec_dataset_examples/val.txt
+    - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/rec_label_val.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -136,5 +142,5 @@ Eval:
   loader:
     shuffle: false
     drop_last: false
-    batch_size_per_card: 128
+    batch_size_per_card: 4
     num_workers: 4

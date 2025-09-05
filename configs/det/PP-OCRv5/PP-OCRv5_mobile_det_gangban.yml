@@ -2,23 +2,27 @@ Global:
   model_name: PP-OCRv5_mobile_det # To use static model for inference.
   debug: false
   use_gpu: true
-  epoch_num: &epoch_num 500
+  epoch_num: &epoch_num 300
   log_smooth_window: 20
   print_batch_step: 100
-  save_model_dir: ./output/PP-OCRv5_mobile_det
-  save_epoch_step: 10
+  save_model_dir: ./output/gangban/PP-OCRv5_mobile_det
+  save_epoch_step: 50
   eval_batch_step:
   - 0
-  - 1500
+  - 20
   cal_metric_during_train: false
   checkpoints:
   pretrained_model: ./pretrained_model/PP-OCRv5_mobile_det_pretrained.pdparams
-  save_inference_dir: null
-  use_visualdl: false
+  save_inference_dir: ./output/gangban/PP-OCRv5_mobile_det/PP-OCRv5_mobile_det_infer/
+  use_visualdl: true
   infer_img: doc/imgs_en/img_10.jpg
-  save_res_path: ./checkpoints/det_db/predicts_db.txt
+  save_res_path: ./output/gangban/det_db/predicts_db.txt
   d2s_train_image_shape: [3, 640, 640]
   distributed: true
+  freeze_params: backbone.  # 冻结所有以 backbone. 开头的参数
+  # use_amp: true
+  # amp_level: O2
+  # amp_dtype: bfloat16
 
 Architecture:
   model_type: det
@@ -41,9 +45,9 @@ Loss:
   name: DBLoss
   balance_loss: true
   main_loss_type: DiceLoss
-  alpha: 5
-  beta: 10
-  ohem_ratio: 3
+  alpha: 2
+  beta: 6
+  ohem_ratio: 2
 
 Optimizer:
   name: Adam
@@ -51,16 +55,16 @@ Optimizer:
   beta2: 0.999
   lr:
     name: Cosine
-    learning_rate: 0.001 #(8*8c)
-    warmup_epoch: 2
+    learning_rate: 0.00005 #(8*8c)
+    warmup_epoch: 30
   regularizer:
     name: L2
     factor: 5.0e-05
 
 PostProcess:
   name: DBPostProcess
-  thresh: 0.3
-  box_thresh: 0.6
+  thresh: 0.2
+  box_thresh: 0.4
   max_candidates: 1000
   unclip_ratio: 1.5
 
@@ -71,9 +75,9 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/icdar2015/text_localization/
+    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/det/
     label_file_list:
-      - ./train_data/icdar2015/text_localization/train_icdar2015_label.txt
+      - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/det/det_label_train.txt
     ratio_list: [1.0]
     transforms:
     - DecodeImage:
@@ -83,23 +87,30 @@ Train:
     - CopyPaste: null
     - IaaAugment:
         augmenter_args:
-        - type: Fliplr
-          args:
-            p: 0.5
+        # - type: Fliplr
+        #   args:
+        #     p: 0.5
         - type: Affine
           args:
             rotate:
-            - -10
-            - 10
-        - type: Resize
+            - -5
+            - 5
+        # - type: Resize
+        #   args:
+        #     size:
+        #     - 1.0
+        #     - 1.3
+        - type: Blur
           args:
-            size:
-            - 0.5
-            - 3
+            blur_limit: [3, 7]
+            p: 0.2
+        - type: CLAHE # 使用CLAHE增强对比度，有助于模型学习微弱字符
+          args:
+            p: 0.5
     - EastRandomCropData:
         size:
-        - 640
-        - 640
+        - 800
+        - 800
         max_tries: 50
         keep_ratio: true
     - MakeBorderMap:
@@ -109,7 +120,7 @@ Train:
         total_epoch: *epoch_num
     - MakeShrinkMap:
         shrink_ratio: 0.4
-        min_text_size: 8
+        min_text_size: 4
         total_epoch: *epoch_num
     - NormalizeImage:
         scale: 1./255.
@@ -132,16 +143,16 @@ Train:
         - shrink_mask
   loader:
     shuffle: true
-    drop_last: false
-    batch_size_per_card: 8
+    drop_last: true
+    batch_size_per_card: 4
     num_workers: 8
 
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/icdar2015/text_localization/
+    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/det/
     label_file_list:
-      - ./train_data/icdar2015/text_localization/test_icdar2015_label.txt
+      - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/det/det_label_val.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -169,6 +180,6 @@ Eval:
   loader:
     shuffle: false
     drop_last: false
-    batch_size_per_card: 1
+    batch_size_per_card: 4
     num_workers: 2
 profiler_options: null
