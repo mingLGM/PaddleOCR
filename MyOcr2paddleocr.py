@@ -295,4 +295,7 @@ def doOcrCropImages(prjPath:str):
 
 
 if __name__ == '__main__':
-    doOcrCropImages(r'/home/zhangshuwen/work/datasets/gangban/')
+    # doOcrCropImages(r'/home/hc/work/lzm/datasets/gangban/')
+    
+    det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_1280/det_label_1280.txt'
+    split_dataset_labels(det_label_path, split_ratio=0.9)

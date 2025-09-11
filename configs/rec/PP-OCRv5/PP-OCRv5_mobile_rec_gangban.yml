@@ -9,7 +9,7 @@ Global:
   save_epoch_step: 50
   eval_batch_step: [0, 10]
   cal_metric_during_train: true
-  pretrained_model: #./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
+  pretrained_model: ./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
   checkpoints: 
   save_inference_dir: ./output/gangban/PP-OCRv5_mobile_rec/PP-OCRv5_mobile_rec_infer/
   use_visualdl: true
@@ -83,10 +83,10 @@ Train:
   dataset:
     name: MultiScaleDataSet
     ds_width: false
-    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/
+    data_dir: /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/
     ext_op_transform_idx: 1
     label_file_list:
-    - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/rec_label_train.txt
+    - /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/rec_label_train.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -121,9 +121,9 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/
+    data_dir: /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/
     label_file_list:
-    - /home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/rec_label_val.txt
+    - /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/rec_label_val.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -142,5 +142,5 @@ Eval:
   loader:
     shuffle: false
     drop_last: false
-    batch_size_per_card: 4
+    batch_size_per_card: 1
     num_workers: 4
