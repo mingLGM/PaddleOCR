@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import json
 import argparse
+from MyOcr2paddleocr import split_dataset_labels
 
 def letterbox_image(img, intermediate_size=640, target_size=(1280, 1280), color=(114, 114, 114)):
     """
@@ -44,20 +45,22 @@ def letterbox_image(img, intermediate_size=640, target_size=(1280, 1280), color=
     
     return padded_img, (scale, scale), (top, bottom, left, right)
 
-def update_annotation_points(points, ratio, pad):
+def update_annotation_points(points, ratio, pad, target_size):
     """
-    更新标注点的坐标以匹配letterbox处理后的图像。
+    更新标注点的坐标以匹配letterbox处理后的图像，并确保坐标不越界。
     
     Args:
         points: 原始标注点列表 [[x1, y1], [x2, y2], ...].
         ratio: 缩放比例 (w_ratio, h_ratio).
         pad: 填充量 (top, bottom, left, right).
+        target_size: 目标图像尺寸 (宽, 高).
         
     Returns:
-        new_points: 更新后的点坐标.
+        new_points: 更新后的点坐标，确保在图像范围内.
     """
     top, bottom, left, right = pad
     w_ratio, h_ratio = ratio
+    target_w, target_h = target_size
     
     new_points = []
     for point in points:
@@ -67,11 +70,16 @@ def update_annotation_points(points, ratio, pad):
         # 应用填充偏移
         x += left
         y += top
+        
+        # 确保坐标不超出图像边界[4,8](@ref)
+        x = max(0, min(x, target_w - 1))  # x在0到target_w-1之间
+        y = max(0, min(y, target_h - 1))  # y在0到target_h-1之间
+        
         new_points.append([int(round(x)), int(round(y))])
     
     return new_points
 
-def process_dataset(image_dir, label_file_path, output_image_dir, output_label_path, target_size=(1280, 1280)):
+def process_dataset(image_dir, label_file_path, output_image_dir, output_label_path, intermediate_size=640, target_size=(1280, 1280)):
     """
     处理整个数据集：调整图像大小并更新标注。
     
@@ -80,6 +88,7 @@ def process_dataset(image_dir, label_file_path, output_image_dir, output_label_p
         label_file_path: 原始标注文件路径.
         output_image_dir: 输出图像目录.
         output_label_path: 输出标注文件路径.
+        intermediate_size: 中间缩放尺寸.
         target_size: 目标尺寸 (宽, 高).
     """
     # 创建输出目录
@@ -102,7 +111,6 @@ def process_dataset(image_dir, label_file_path, output_image_dir, output_label_p
         
         # 构建完整的图像路径
         full_img_path = os.path.join(image_dir, img_path)
-        # print(full_img_path)
         
         # 检查图像文件是否存在
         if not os.path.exists(full_img_path):
@@ -116,12 +124,10 @@ def process_dataset(image_dir, label_file_path, output_image_dir, output_label_p
             continue
         
         # 应用letterbox
-        # processed_img, ratio, pad = letterbox_image(img, target_size)
-        processed_img, ratio, pad = letterbox_image(img, intermediate_size=640, target_size=target_size)
+        processed_img, ratio, pad = letterbox_image(img, intermediate_size, target_size=target_size)
         
         # 保存处理后的图像
         output_img_path = os.path.join(output_image_dir, img_path)
-        # print(output_img_path)
         cv2.imwrite(output_img_path, processed_img)
         
         # 解析并更新标注
@@ -131,7 +137,7 @@ def process_dataset(image_dir, label_file_path, output_image_dir, output_label_p
             
             for ann in annotations:
                 if 'points' in ann:
-                    updated_points = update_annotation_points(ann['points'], ratio, pad)
+                    updated_points = update_annotation_points(ann['points'], ratio, pad, target_size)
                     updated_ann = ann.copy()
                     updated_ann['points'] = updated_points
                     updated_annotations.append(updated_ann)
@@ -155,12 +161,13 @@ def process_dataset(image_dir, label_file_path, output_image_dir, output_label_p
     print(f"更新后的标注文件: {output_label_path}")
 
 if __name__ == "__main__":
-    ####使用LetterBox处理数据集图像和标注
-    
+    # 使用LetterBox处理数据集图像和标注
     image_dir        = r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det"          # 原始图像目录
     label_file       = r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det/det_label.txt"      # 原始标注文件
-    output_image_dir = r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_1280"     # 输出图像目录
-    output_label_file= r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_1280/det_label_1280.txt" # 输出标注文件
-    target_size      = (1280, 1280)            # 目标尺寸 (宽, 高)
+    output_image_dir = r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_640"     # 输出图像目录
+    output_label_file= r"/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_640/det_label_640.txt" # 输出标注文件
+    intermediate_size = 640          # 原图先按比例缩放到此中间尺寸
+    target_size      = (640, 640)     # 最终填充到目标尺寸 (宽, 高)
     
-    process_dataset(image_dir, label_file, output_image_dir, output_label_file, target_size)
+    process_dataset(image_dir, label_file, output_image_dir, output_label_file, intermediate_size, target_size)
+    split_dataset_labels(output_label_file, split_ratio=0.9)

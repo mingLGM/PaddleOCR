@@ -1,4 +1,3 @@
-# OCR抠图并生成PaddleOCR训练标签
 from pathlib import Path
 import cv2 as cv
 import os, json
@@ -7,14 +6,17 @@ import numpy as np
 import re
 import shutil
 import random
+import math
 
 def translate_points(dx, dy, points):
+    """平移点集"""
     points[0::2] += dx
     points[1::2] += dy
 
-def roate_points(rad, points):
-    xs = points[0::2]
-    ys = points[1::2]
+def rotate_points(rad, points):
+    """旋转点集（修复版）"""
+    xs = points[0::2].copy()
+    ys = points[1::2].copy()
     _xs = xs * np.cos(rad) - ys * np.sin(rad)
     _ys = xs * np.sin(rad) + ys * np.cos(rad)
     points[0::2] = _xs
@@ -23,28 +25,40 @@ def roate_points(rad, points):
 
 def get_cornerpoints(points, rad):
     """
-    获取旋转矩形的四个角点
+    获取旋转矩形的四个角点（修复版）
     """
     x1, y1, x2, y2 = points
     cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-    translate_points(-cx, -cy, points)
-    roate_points(-rad, points)
     
-    x1, y1, x2, y2 = points
-    width, height = abs(x2-x1), abs(y2-y1)
+    # 创建点的副本以避免修改原始数据
+    points_copy = np.array([x1, y1, x2, y2], dtype=np.float64)
     
-    conners = np.array([-width/2, -height/2, width / 2, -height / 2, width/2, height/2, -width/2, height/2])
-    roate_points(rad, conners)
+    # 平移点到中心
+    translate_points(-cx, -cy, points_copy)
+    
+    # 旋转点
+    rotate_points(-rad, points_copy)
+    
+    x1, y1, x2, y2 = points_copy
+    width, height = abs(x2 - x1), abs(y2 - y1)
+    
+    # 计算四个角点
+    conners = np.array([
+        -width/2, -height/2, 
+        width/2, -height/2, 
+        width/2, height/2, 
+        -width/2, height/2
+    ], dtype=np.float64)
+    
+    # 旋转回原方向并平移回原位置
+    rotate_points(rad, conners)
     translate_points(cx, cy, conners)
     
     return conners, (cx, cy), width, height
 
 def crop_rotated_rectangle(image, points):
     """
-    从图像中抠取旋转矩形区域
-    :param image: 原始图像
-    :param points: 旋转矩形的四个角点，格式为np.array([x1,y1, x2,y2, x3,y3, x4,y4])
-    :return: 抠取后的矩形图像
+    从图像中抠取旋转矩形区域（修复版）
     """
     # 将一维点数组转换为二维点数组 (4x2)
     points = points.reshape(4, 2).astype(np.float32)
@@ -53,10 +67,9 @@ def crop_rotated_rectangle(image, points):
     width = int(np.linalg.norm(points[0] - points[1]))
     height = int(np.linalg.norm(points[1] - points[2]))
     
-    # 如果计算出的宽度或高度为0，则使用替代方法
-    if width == 0 or height == 0:
-        rect = cv.minAreaRect(points)
-        width, height = int(rect[1][0]), int(rect[1][1])
+    # 确保宽度和高度为正数
+    width = max(1, width)
+    height = max(1, height)
     
     # 定义目标矩形的四个点（正矩形）
     dst_points = np.array([
@@ -79,6 +92,7 @@ def crop_rotated_rectangle(image, points):
     return cropped
 
 def draw_points(img, points, color):
+    """在图像上绘制点"""
     nLen = len(points)
     for i in range(0, nLen, 2):
         x = int(points[i])
@@ -88,15 +102,28 @@ def draw_points(img, points, color):
 
 def trans_points_to_cropImage(center, rad, points, w, h):
     """
-    将点转换到抠图坐标系下
+    将点转换到抠图坐标系下（修复版）
     """
     cx, cy = center
-    translate_points(-cx, -cy, points)
-    roate_points(-rad, points)
-    translate_points(w/2, h/2, points)
-    return points
+    points_copy = points.copy()
+    
+    # 平移点到中心
+    translate_points(-cx, -cy, points_copy)
+    
+    # 旋转点
+    rotate_points(-rad, points_copy)
+    
+    # 平移到裁剪图像中心
+    translate_points(w/2, h/2, points_copy)
+    
+    # 确保坐标在图像范围内[7](@ref)
+    points_copy[0::2] = np.clip(points_copy[0::2], 0, w - 1)
+    points_copy[1::2] = np.clip(points_copy[1::2], 0, h - 1)
+    
+    return points_copy
 
 def get_new_number_filename(fileName:str, idx: int):
+    """生成带序号的新文件名"""
     idxStr = str(idx)
     for i in range(5):
         if i >= len(idxStr):
@@ -133,15 +160,9 @@ def convert_to_paddleocr_format(annotations, image_path):
     # 创建PaddleOCR格式的行
     return f"{image_path}\t{json.dumps(paddle_annotations)}\n"
 
-
 def split_dataset_labels(label_path, split_ratio=0.9, random_seed=42):
     """
     划分数据集标签为训练集和验证集
-    
-    参数:
-    label_path: 标签文件路径
-    split_ratio: 训练集比例，默认0.9 (9:1)
-    random_seed: 随机种子，确保结果可重现
     """
     # 设置随机种子
     random.seed(random_seed)
@@ -151,7 +172,7 @@ def split_dataset_labels(label_path, split_ratio=0.9, random_seed=42):
     with open(label_path, 'r', encoding='utf-8') as f:
         label_lines = f.readlines()
     
-    # 打乱检测标签顺序[2,3](@ref)
+    # 打乱检测标签顺序
     random.shuffle(label_lines)
     
     # 划分检测数据集
@@ -173,9 +194,10 @@ def split_dataset_labels(label_path, split_ratio=0.9, random_seed=42):
     print(f"划分比例: {split_ratio*100}% 训练, {(1-split_ratio)*100}% 验证")
 
 def doOcrCropImages(prjPath:str):
+    """OCR抠图并生成PaddleOCR训练标签（修复版）"""
     prjPath = Path(prjPath)
-    if not prjPath.exists() or not os.path.join(prjPath, "inputImages") or not os.path.join(prjPath, "labelInfo"):
-        print(f"项目路径不存在: {prjPath}")
+    if not prjPath.exists() or not os.path.exists(os.path.join(prjPath, "inputImages")) or not os.path.exists(os.path.join(prjPath, "labelInfo")):
+        print(f"项目路径不存在或缺少必要目录: {prjPath}")
         return
     
     # 创建新的PaddleOCR数据集目录结构
@@ -215,6 +237,11 @@ def doOcrCropImages(prjPath:str):
             
             original_img_path = os.path.join(inputImagesRoot, img_file_name)
             
+            # 检查图像文件是否存在
+            if not os.path.exists(original_img_path):
+                print(f"警告：图像文件 {original_img_path} 不存在，跳过")
+                continue
+            
             # 复制原始图像到det/images目录
             det_sanitized_name = rename_filename(img_file_name)
             det_image_path = os.path.join(det_images_path, det_sanitized_name)
@@ -240,43 +267,53 @@ def doOcrCropImages(prjPath:str):
 
             if 'annotations' in content:
                 for k, obj in enumerate(list(content['annotations']), 0):
+                    try:
+                        # 获取原始图像上的标注坐标
+                        dividepoints = obj['dividepoints']
+                        points = obj['points']
+                        rad = obj['angle']
 
-                    # 获取原始图像上的标注坐标
-                    dividepoints = obj['dividepoints']
-                    points = obj['points']
-                    rad = obj['angle']
-
-                    # 获取四个角点
-                    corners, center, w, h = get_cornerpoints(np.asarray(points), rad)
-
-                    cropped = crop_rotated_rectangle(mat, corners)
-
-                    # 将点转换到抠图坐标上
-                    _dividepoints = trans_points_to_cropImage(center, rad, np.asarray(dividepoints), w, h)
-                    _points = trans_points_to_cropImage(center, rad, np.asarray(points), w, h)
-                    _corners = trans_points_to_cropImage(center, rad, corners, w, h)
- 
-                    obj['angle'] = 0
-                    obj['area'] = w * h
-                    obj['dividepoints'] = list(_dividepoints)
-                    obj['points'] = list(_points)
-                    _content[k] = obj
-                
-                # 生成新的文件名（带序号）
-                img_file_name = get_new_number_filename(img_file_name, i - 1)
-                
-                # 保存裁剪后的图像到rec/images目录
-                rec_sanitized_name = rename_filename(img_file_name)
-                cropped_img_path = os.path.join(rec_images_path, rec_sanitized_name)
-                cv.imwrite(cropped_img_path, cropped)
-                rec_relative_path = os.path.join("images", rec_sanitized_name)
-                
-                # 生成PaddleOCR识别标签
-                transcription = obj.get('transcription', '')
-                if transcription:
-                    # 使用rec目录中的图像路径
-                    rec_label_line = f"{rec_relative_path}\t{transcription}\n"
-                    rec_label_file.write(rec_label_line)
+                        # 获取四个角点
+                        corners, center, w, h = get_cornerpoints(np.asarray(points), rad)
+                        
+                        # 确保宽度和高度为正
+                        w, h = max(1, int(w)), max(1, int(h))
+                        
+                        cropped = crop_rotated_rectangle(mat, corners)
+                        
+                        if cropped is None or cropped.size == 0:
+                            print(f"警告: 无法裁剪图像 {img_file_name} 的标注 {k}")
+                            continue
+                        
+                        # 将点转换到抠图坐标上
+                        _dividepoints = trans_points_to_cropImage(center, rad, np.asarray(dividepoints), w, h)
+                        _points = trans_points_to_cropImage(center, rad, np.asarray(points), w, h)
+                        
+                        obj['angle'] = 0
+                        obj['area'] = w * h
+                        obj['dividepoints'] = list(_dividepoints)
+                        obj['points'] = list(_points)
+                        _content['annotations'][k] = obj
+                        
+                        # 生成新的文件名（带序号）
+                        img_file_name = get_new_number_filename(img_file_name, i - 1)
+                        
+                        # 保存裁剪后的图像到rec/images目录
+                        rec_sanitized_name = rename_filename(img_file_name)
+                        cropped_img_path = os.path.join(rec_images_path, rec_sanitized_name)
+                        cv.imwrite(cropped_img_path, cropped)
+                        rec_relative_path = os.path.join("images", rec_sanitized_name)
+                        
+                        # 生成PaddleOCR识别标签
+                        transcription = obj.get('transcription', '')
+                        if transcription:
+                            # 使用rec目录中的图像路径
+                            rec_label_line = f"{rec_relative_path}\t{transcription}\n"
+                            rec_label_file.write(rec_label_line)
+                            
+                    except Exception as e:
+                        print(f"处理图像 {img_file_name} 的标注 {k} 时出错: {str(e)}")
+                        continue
 
             print(f'{file} be processed finished  {i}/{nLen} ')
     
@@ -291,10 +328,8 @@ def doOcrCropImages(prjPath:str):
     print(f"检测数据位置: {det_path}")
     print(f"识别数据位置: {rec_path}")
 
-
-
-
 if __name__ == '__main__':
+    # 使用示例
     # doOcrCropImages(r'/home/hc/work/lzm/datasets/gangban/')
     
     det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_1280/det_label_1280.txt'
