@@ -328,9 +328,112 @@ def doOcrCropImages(prjPath:str):
     print(f"检测数据位置: {det_path}")
     print(f"识别数据位置: {rec_path}")
 
+
+def create_inverted_images_and_labels(original_label_file_path, output_base_dir='./train_data/cls'):
+    """
+    根据原有的正向分类数据集，创建180度反转的图像和对应的标签文件。
+    目录结构将符合PaddleOCR示例：
+        images/0/ - 原始图像（0度）
+        images/180/ - 反转图像（180度）
+    
+    Args:
+        original_label_file_path (str): 原有正向数据标签文件的路径。
+        output_base_dir (str): 新生成的数据集存放的根目录。
+    """
+
+    # 定义目录路径
+    original_image_dir = os.path.dirname(original_label_file_path)  # 原始图像所在目录
+    images_dir = os.path.join(output_base_dir, 'images')  # 图像存储目录
+    images_0_dir = os.path.join(images_dir, '0')  # 0度图像目录
+    images_180_dir = os.path.join(images_dir, '180')  # 180度图像目录
+    inverted_label_file_path = os.path.join(output_base_dir, 'cls_label.txt')  # 最终合并后的标签文件
+
+    # 创建输出目录
+    os.makedirs(images_0_dir, exist_ok=True)
+    os.makedirs(images_180_dir, exist_ok=True)
+    os.makedirs(output_base_dir, exist_ok=True)
+
+    # 读取原始标签文件
+    original_lines = []
+    with open(original_label_file_path, 'r', encoding='utf-8') as f:
+        original_lines = f.readlines()
+
+    # 处理原始标签行并生成反转图像和标签
+    new_label_lines = []  # 用于存储所有标签行（包括原始和新的）
+
+    for line in original_lines:
+        # 清理行尾的换行符并按制表符分割
+        parts = line.strip().split('\t')
+        if len(parts) < 2:
+            print(f"Skipping invalid line: {line}")
+            continue
+
+        # 获取图像路径和标签
+        original_image_rel_path = parts[0]  # 原始图片的相对路径
+        label = parts[1]  # 标签
+
+        # 构建原始图像的绝对路径
+        original_image_path = os.path.join(original_image_dir, original_image_rel_path)
+
+        # 检查原始图像是否存在
+        if not os.path.exists(original_image_path):
+            print(f"Original image not found: {original_image_path}, skipping.")
+            continue
+
+        # 获取图像文件名
+        image_filename = os.path.basename(original_image_rel_path)
+        
+        # 复制原始图像到 images/0 目录
+        dest_image_0_path = os.path.join(images_0_dir, image_filename)
+        if not os.path.exists(dest_image_0_path):
+            shutil.copy2(original_image_path, dest_image_0_path)
+            print(f"Copied original image to: {dest_image_0_path}")
+        
+        # 为原始图像添加标签行（0度）
+        new_image_0_rel_path = os.path.join('images', '0', image_filename)
+        new_label_line_0 = f"{new_image_0_rel_path}\t0\n"
+        new_label_lines.append(new_label_line_0)
+
+        # 创建反转图像并保存到 images/180 目录
+        name_part, ext_part = os.path.splitext(image_filename)
+        inverted_image_filename = f"{name_part}_inv{ext_part}"
+        inverted_image_path = os.path.join(images_180_dir, inverted_image_filename)
+
+        try:
+            with Image.open(original_image_path) as img:
+                inverted_img = img.rotate(180)  # 旋转180度
+                inverted_img.save(inverted_image_path)
+                print(f"Created inverted image: {inverted_image_path}")
+        except Exception as e:
+            print(f"Failed to process image {original_image_path}: {e}")
+            continue
+
+        # 为反转图像添加标签行（180度）
+        new_image_180_rel_path = os.path.join('images', '180', inverted_image_filename)
+        new_label_line_180 = f"{new_image_180_rel_path}\t1\n"
+        new_label_lines.append(new_label_line_180)
+
+    # 将所有的标签行写入新的标签文件
+    with open(inverted_label_file_path, 'w', encoding='utf-8') as f:
+        f.writelines(new_label_lines)
+
+    print(f"\nAll done!")
+    print(f"Original images are saved in: {images_0_dir}")
+    print(f"Inverted images are saved in: {images_180_dir}")
+    print(f"Merged label file is saved as: {inverted_label_file_path}")
+    print(f"Directory structure:")
+    print(f"  {output_base_dir}/")
+    print(f"    ├── images/")
+    print(f"    │   ├── 0/      # Original images (0 degrees)")
+    print(f"    │   └── 180/    # Inverted images (180 degrees)")
+    print(f"    └── cls_label.txt  # Label file")
+
+
+
 if __name__ == '__main__':
     # 使用示例
     # doOcrCropImages(r'/home/hc/work/lzm/datasets/gangban/')
     
-    det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/det_1280/det_label_1280.txt'
+    det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/cls/cls_label.txt'
+    # create_inverted_images_and_labels(det_label_path, r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/cls/')
     split_dataset_labels(det_label_path, split_ratio=0.9)
