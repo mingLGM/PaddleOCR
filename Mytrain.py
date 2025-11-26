@@ -44,6 +44,6 @@ python tools/infer/predict_system.py --image_dir="/home/zhangshuwen/work/dataset
 python tools/infer_rec.py  -c configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec_gangban.yml -o Global.infer_img="/home/zhangshuwen/work/datasets/gangban/paddleocr_dataset/rec/images/" Global.checkpoints="./output/gangban/PP-OCRv5_mobile_rec/latest"
 
 
-python tools/export_model.py -c configs/det/PP-OCRv5/PP-OCRv5_mobile_det_gangban.yml -o Global.pretrained_model="./output/gangban/PP-OCRv5_mobile_det_1280/best_model/model.pdparams" Global.save_inference_dir="./output/gangban/PP-OCRv5_mobile_det_1280/PP-OCRv5_mobile_det_infer/"
-python tools/export_model.py -c configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec_gangban.yml -o Global.pretrained_model="./output/gangban/PP-OCRv5_mobile_rec/best_model/model.pdparams" Global.save_inference_dir="./output/gangban/PP-OCRv5_mobile_rec/PP-OCRv5_mobile_rec_infer/"
+python tools/export_model.py -c configs/det/PP-OCRv5/PP-OCRv5_mobile_det_gangban.yml -o Global.pretrained_model="./output/gangban/PP-OCRv5_mobile_det_data640/best_model/model.pdparams" Global.save_inference_dir="./output/gangban/PP-OCRv5_mobile_det_data640/gangban_PP-OCRv5_mobile_det_infer/"
+python tools/export_model.py -c configs/rec/PP-OCRv5/PP-OCRv5_mobile_rec_gangban.yml -o Global.pretrained_model="./output/gangban/PP-OCRv5_mobile_rec/best_model/model.pdparams" Global.save_inference_dir="./output/gangban/PP-OCRv5_mobile_rec/gangban_PP-OCRv5_mobile_rec_infer/"
 

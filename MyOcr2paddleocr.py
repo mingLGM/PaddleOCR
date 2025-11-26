@@ -193,8 +193,29 @@ def split_dataset_labels(label_path, split_ratio=0.9, random_seed=42):
     print(f"验证集: {len(label_val)} 条, 保存于: {label_val_path}")
     print(f"划分比例: {split_ratio*100}% 训练, {(1-split_ratio)*100}% 验证")
 
-def doOcrCropImages(prjPath:str):
-    """OCR抠图并生成PaddleOCR训练标签（修复版）"""
+def datasetConvert_HC2PaddleOCR(prjPath:str):
+    """
+    将 HC 格式的OCR标注数据集转换为 PaddleOCR 官方所需的两任务格式：
+        1. 文本检测(det)任务：提供原图 + 检测标签(det_label.txt)
+        2. 文本识别(rec)任务：提供按检测框裁剪后的单行文本图 + 识别标签(rec_label.txt)
+    同时自动完成训练/验证集划分(9:1)。
+
+    目录结构生成如下：
+    prjPath/paddleocr_dataset/
+    ├── det/
+    │   ├── images/           # 检测任务原图
+    │   └── det_label.txt     # 检测标签，每行：图像相对路径\t[{"points":[[x1,y1],...],"transcription":"text"},...]
+    └── rec/
+        ├── images/           # 识别任务裁剪图
+        └── rec_label.txt     # 识别标签，每行：图像相对路径\t文本
+
+    参数
+    ----
+    prjPath : str
+        HC 项目根目录，其下必须存在
+        - inputImages/   原图文件夹
+        - labelInfo/     标注 json 文件夹（每张图对应一个 json, 内含 images/annotations 字段）
+    """
     prjPath = Path(prjPath)
     if not prjPath.exists() or not os.path.exists(os.path.join(prjPath, "inputImages")) or not os.path.exists(os.path.join(prjPath, "labelInfo")):
         print(f"项目路径不存在或缺少必要目录: {prjPath}")
@@ -432,8 +453,8 @@ def create_inverted_images_and_labels(original_label_file_path, output_base_dir=
 
 if __name__ == '__main__':
     # 使用示例
-    # doOcrCropImages(r'/home/hc/work/lzm/datasets/gangban/')
+    datasetConvert_HC2PaddleOCR(r'/home/hc/work/lzm/datasets/gangban')
     
-    det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/cls/cls_label.txt'
+    # det_label_path = r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/cls/cls_label.txt'
     # create_inverted_images_and_labels(det_label_path, r'/home/hc/work/lzm/datasets/gangban/paddleocr_dataset/cls/')
-    split_dataset_labels(det_label_path, split_ratio=0.9)
+    # split_dataset_labels(det_label_path, split_ratio=0.9)
