@@ -5,9 +5,9 @@ Global:
   epoch_num: 600
   log_smooth_window: 20
   print_batch_step: 200
-  save_model_dir: ./output/gangban/PP-OCRv5_mobile_rec
-  save_epoch_step: 50
-  eval_batch_step: [0, 10]
+  save_model_dir: ./output/gangban/PP-OCRv5_mobile_rec_20251128
+  save_epoch_step: 100
+  eval_batch_step: [0, 100]
   cal_metric_during_train: true
   pretrained_model: ./pretrained_model/PP-OCRv5_mobile_rec_pretrained.pdparams
   checkpoints: 
@@ -28,8 +28,8 @@ Optimizer:
   beta2: 0.999
   lr:
     name: Cosine
-    learning_rate: 0.0005
-    warmup_epoch: 10
+    learning_rate: 0.0001
+    warmup_epoch: 20
   regularizer:
     name: L2
     factor: 3.0e-05
@@ -50,12 +50,12 @@ Architecture:
           Neck:
             name: svtr
             dims: 120
-            depth: 2
+            depth: 3
             hidden_dims: 120
             kernel_size: [1, 3]
             use_guide: True
           Head:
-            fc_decay: 0.00001
+            fc_decay: 0.000005
       - NRTRHead:
           nrtr_dim: 384
           max_text_length: *max_text_length
@@ -64,13 +64,14 @@ Loss:
   name: MultiLoss
   loss_config_list:
     - CTCLoss:
-        weight: 0.7  # 增加CTC损失的权重
+        weight: 0.5  # 增加CTC损失的权重
     - NRTRLoss:
-        weight: 0.3  # 减少NRTR损失的权重
+        weight: 0.5  # 减少NRTR损失的权重
 
 
 PostProcess:  
   name: CTCLabelDecode
+  beam_width: 3
 
 Metric:
   name: RecMetric
@@ -80,10 +81,10 @@ Train:
   dataset:
     name: MultiScaleDataSet
     ds_width: false
-    data_dir: /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/
+    data_dir: /home/zhangshuwen/work/datasets/gangban_字符扩大识别1113/paddleocr_dataset/rec/
     ext_op_transform_idx: 1
     label_file_list:
-    - /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/rec_label_train.txt
+    - /home/zhangshuwen/work/datasets/gangban_字符扩大识别1113/paddleocr_dataset/rec/rec_label_train.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
@@ -106,7 +107,7 @@ Train:
   sampler:
     name: MultiScaleSampler
     scales: [[320, 32], [320, 48], [320, 64]]
-    first_bs: &bs 8
+    first_bs: &bs 16
     fix_bs: false
     divided_factor: [8, 16] # w, h
     is_training: True
@@ -114,13 +115,13 @@ Train:
     shuffle: true
     batch_size_per_card: *bs
     drop_last: true
-    num_workers: 8
+    num_workers: 32
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/
+    data_dir: /home/zhangshuwen/work/datasets/gangban_字符扩大识别1113/paddleocr_dataset/rec/
     label_file_list:
-    - /home/hc/work/lzm/datasets/gangban/paddleocr_dataset/rec/rec_label_val.txt
+    - /home/zhangshuwen/work/datasets/gangban_字符扩大识别1113/paddleocr_dataset/rec/rec_label_val.txt
     transforms:
     - DecodeImage:
         img_mode: BGR
